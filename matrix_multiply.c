@@ -22,6 +22,11 @@ int main(int argc, char **argv){
 	 * Initialize openshemm
 	 */
 	start_pes(0);
+	//check to see if data elements can be broken up evenly in the process grid NB elements per process
+	if (fmod((double)N,sqrt(shmem_n_pes()))!=0){
+		printf("N%P!=0 make sure P divides N evenly\n");
+		exit(1);
+	}
 	dgemm_(N, 1.0, A, B, 0.0, C);
 
 	return 0;
