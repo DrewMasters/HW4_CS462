@@ -5,7 +5,7 @@
 #include "libgemm.h"
 
 int dgemm_(int N, double alpha, char* A_filename, char *B_filename, double beta, char *C_filename){
-	int peid, P, NB, dP, i, j;
+	int peid, P, NB, dP, i, j, x=0;
 	double *A, *B, *C;
 	long pSync[_SHMEM_BCAST_SYNC_SIZE];
 
@@ -46,12 +46,13 @@ int dgemm_(int N, double alpha, char* A_filename, char *B_filename, double beta,
 	shmem_broadcast64(C,C,N*N,0,0,0,P, pSync);
 	shmem_barrier_all();
 
-	for (i=0; i < P; i++){
-		if (peid == i){
-			printf("peid: %d\n",peid);
-			//print_array(A,N,A_filename);
-			//print_array(B,N,B_filename);
-			//print_array(C,N,C_filename);
+	for (i=0; i < N*N; i++){
+		if ((i/N)/NB!=0) x=1;
+		//printf("i: %d row: %d col: %d pr: %d pc: %d process: %d\n",i,i/N,i%N,(i/N)/NB,(i%N)%NB,(i/N)/NB+(i%N)/NB+x);
+		if (peid == (i/N)/NB+(i%N)/NB+x){
+			//printf("peid: %d i: %d\n",peid, i);
+			dot_product(A,B,C,alpha,beta,N,i/N,i%N);
+			shmem_double_put(C+i,C+i,1,0);
 		}
 	}
 
@@ -83,4 +84,17 @@ void print_array(double *t, int N, char *name){
 	for (i=0; i<N*N; i++){
 		printf("i: %d val: %f\n",i,t[i]);
 	}
+	return;
+}
+
+void dot_product(double *A, double *B, double *C, double alpha, double beta, int N, int r, int c){
+	int i;
+	double sum=0;
+	for (i=0; i < N; i++){
+		//printf("r: %d c: %d i: %d A: %f B: %f\n",r,c,i,A[r*N+i],B[i*N+c]);
+		sum=A[r*N+i]*B[i*N+c]+sum;
+	}
+	sum = sum*alpha;
+	//printf("r: %d c: %d sum: %f prevC: %f updatedC: %f\n",r,c,sum,C[r*N+c],sum+(beta*C[r*N+c]));
+	C[r*N+c]=sum+(beta*C[r*N+c]);
 }
